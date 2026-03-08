@@ -64,21 +64,32 @@ class Transaction:
     timestamp: datetime.datetime = field(default_factory = datetime.datetime.now)
 
     
+from abc import ABC, abstractmethod
+class TransactionTypeStrategy(ABC):
+    @abstractmethod
+    def execute(self, account, amount):
+        pass
+
+class Withdraw(TransactionTypeStrategy):
+    def execute(self, account, amount):
+        account.withdraw(amount)
+
+
+class Deposit(TransactionTypeStrategy):        
+    def execute(self, account, amount):
+        account.deposit(amount)
+
 
 # Application Layer
 class ATMService:
-    def __init__(self, account_repo, txn_repo):
+    def __init__(self, account_repo, txn_repo, strategy):
         self.account_repo = account_repo
         self.txn_repo = txn_repo
+        self.strategy = strategy
 
     def _process_transaction(self, txn_type, amount):
         account = self.account_repo.get_account()
-        if txn_type == TransactionType.WITHDRAW:
-            account.withdraw(amount)
-        elif txn_type == TransactionType.DEPOSIT:
-            account.deposit(amount)
-        else:
-            raise ValueError("Invalid transaction type")
+        self.strategy.execute(account, amount)
         self.account_repo.update_balance(account)
         transaction = Transaction(txn_type.value, amount, account.balance)
         self.txn_repo.save_transaction(transaction)
@@ -97,11 +108,13 @@ class ATMService:
         return self.txn_repo.get_all_transactions()
     
 
-atm_repo = AccountRepository(InMemoryDB)
+
+account_repo = AccountRepository(InMemoryDB)
 txn_repo = TransactionRepository(InMemoryDB)
-atm_service = ATMService(atm_repo, txn_repo)
 
 amount_to_withdraw = 100
+transactionstrategy = Withdraw()
+atm_service = ATMService(account_repo, txn_repo, transactionstrategy)
 try:
     remaining_balance = atm_service.withdraw(amount_to_withdraw)
     print(f"Amount Withdrawl: ${amount_to_withdraw}")
@@ -110,6 +123,8 @@ except ValueError as e:
     print(e)
 
 amount_to_deposit = 500
+transactionstrategy = Deposit()
+atm_service = ATMService(account_repo, txn_repo, transactionstrategy)
 try:
     remaining_balance = atm_service.deposit(amount_to_deposit)
     print(f"Amount Deposited: ${amount_to_deposit}")
